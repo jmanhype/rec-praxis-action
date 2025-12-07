@@ -248,6 +248,81 @@ SARIF files are automatically compressed with gzip (~70% size reduction) for eff
 - Both compressed (.gz) and original files available
 - GitHub Security Tab still receives uncompressed SARIF
 
+### Multi-Repository Scanning
+
+Scan multiple repositories in a single workflow using matrix strategy:
+
+```yaml
+name: Multi-Repo Security Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly scan
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo:
+          - name: frontend
+            url: https://github.com/org/frontend
+            path: frontend
+          - name: backend
+            url: https://github.com/org/backend
+            path: backend
+          - name: mobile-app
+            url: https://github.com/org/mobile-app
+            path: mobile-app
+      fail-fast: false
+
+    steps:
+      - name: Checkout ${{ matrix.repo.name }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo.url }}
+          path: ${{ matrix.repo.path }}
+
+      - name: Scan ${{ matrix.repo.name }}
+        uses: jmanhype/rec-praxis-action@v1
+        with:
+          scan-type: 'all'
+          files: '${{ matrix.repo.path }}/**/*.py'
+          format: 'sarif'
+        continue-on-error: true
+
+      - name: Upload ${{ matrix.repo.name }} SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: code-review-results.sarif
+          category: rec-praxis-${{ matrix.repo.name }}
+
+      - name: Upload ${{ matrix.repo.name }} Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.repo.name }}-security-results
+          path: '*.sarif.gz'
+          retention-days: 30
+```
+
+**Benefits**:
+- Single workflow scans multiple repos
+- Parallel execution (faster than sequential)
+- Separate SARIF categories in GitHub Security tab
+- Centralized security monitoring
+- Matrix strategy handles failures gracefully
+
+**Monorepo Scanning**:
+```yaml
+- uses: jmanhype/rec-praxis-action@v1
+  with:
+    files: 'services/api/**/*.py services/worker/**/*.py'
+    incremental: 'true'  # Only scan changed services
+```
+
 ### PR Comment with Findings
 
 Combine with GitHub Script to post results as PR comments:
