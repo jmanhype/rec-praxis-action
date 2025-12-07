@@ -1,0 +1,60 @@
+name: Test rec-praxis-action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-action:
+    name: Test Action on rec-praxis-rlm Repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout rec-praxis-rlm for testing
+        uses: actions/checkout@v4
+        with:
+          repository: jmanhype/rec-praxis-rlm
+          path: test-repo
+
+      - name: Test rec-praxis-action (Code Review)
+        uses: ./
+        with:
+          scan-type: 'review'
+          severity: 'MEDIUM'
+          fail-on: 'CRITICAL'
+        continue-on-error: true
+
+      - name: Test rec-praxis-action (Security Audit)
+        uses: ./
+        with:
+          scan-type: 'audit'
+          fail-on: 'HIGH'
+        continue-on-error: true
+
+      - name: Test rec-praxis-action (All Scans)
+        id: full-scan
+        uses: ./
+        with:
+          scan-type: 'all'
+          severity: 'HIGH'
+          fail-on: 'CRITICAL'
+          format: 'json'
+        continue-on-error: true
+
+      - name: Display Results
+        if: always()
+        run: |
+          echo "Total findings: ${{ steps.full-scan.outputs.total-findings }}"
+          echo "Blocking findings: ${{ steps.full-scan.outputs.blocking-findings }}"
+          echo "Results file: ${{ steps.full-scan.outputs.results-file }}"
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-scan-results
+          path: |
+            *.json
+            *.toon

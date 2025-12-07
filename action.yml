@@ -1,0 +1,51 @@
+name: 'rec-praxis-rlm Security Scanner'
+description: 'Automated code review, security audit, and dependency scanning with procedural memory-powered AI agents'
+author: 'jmanhype'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  scan-type:
+    description: 'Type of scan to run: review, audit, deps, or all'
+    required: false
+    default: 'all'
+  severity:
+    description: 'Minimum severity level (LOW, MEDIUM, HIGH, CRITICAL)'
+    required: false
+    default: 'HIGH'
+  fail-on:
+    description: 'Fail build on this severity or higher (LOW, MEDIUM, HIGH, CRITICAL)'
+    required: false
+    default: 'CRITICAL'
+  files:
+    description: 'Files or patterns to scan (space-separated). Default: all Python files'
+    required: false
+    default: '**/*.py'
+  format:
+    description: 'Output format: json, toon, or text'
+    required: false
+    default: 'json'
+  memory-dir:
+    description: 'Directory for procedural memory storage'
+    required: false
+    default: '.rec-praxis-rlm'
+
+outputs:
+  total-findings:
+    description: 'Total number of issues found'
+  blocking-findings:
+    description: 'Number of issues at fail-on severity or higher'
+  results-file:
+    description: 'Path to results file'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.scan-type }}
+    - ${{ inputs.severity }}
+    - ${{ inputs.fail-on }}
+    - ${{ inputs.files }}
+    - ${{ inputs.format }}
+    - ${{ inputs.memory-dir }}
