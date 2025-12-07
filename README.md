@@ -6,9 +6,10 @@ Automated code review, security auditing, and dependency scanning powered by pro
 
 - **🔍 Code Review**: Pattern-based detection of code quality issues with AI-powered suggestions
 - **🔒 Security Audit**: OWASP Top 10 detection, CWE mapping, vulnerability identification
-- **📦 Dependency Scanning**: CVE detection in Python packages + secret/credential scanning
+- **📦 Dependency Scanning**: CVE detection in Python and npm packages + secret/credential scanning
 - **🧠 Procedural Memory**: Learns from past fixes and improves recommendations over time
 - **⚡ Token-Efficient**: Optional TOON format reduces LLM token usage by 40-50%
+- **🌐 Polyglot Support**: Python and JavaScript/TypeScript scanning with dedicated security tools
 
 ## Quick Start
 
@@ -37,7 +38,8 @@ jobs:
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `scan-type` | Type of scan: `review`, `audit`, `deps`, or `all` | `all` |
+| `scan-type` | Type of scan: `review`, `audit`, `deps`, `all`, `review-js`, `audit-js`, `deps-js`, `all-js` | `all` |
+| `language` | Primary language: `python`, `javascript`, `typescript`, or `auto-detect` | `python` |
 | `severity` | Minimum severity to report (LOW, MEDIUM, HIGH, CRITICAL) | `HIGH` |
 | `fail-on` | Fail build at this severity or higher | `CRITICAL` |
 | `files` | Files or patterns to scan (space-separated) | `**/*.py` |
@@ -363,6 +365,124 @@ Combine with GitHub Script to post results as PR comments:
       });
 ```
 
+### JavaScript/TypeScript Scanning
+
+Comprehensive security scanning for JavaScript and TypeScript projects:
+
+```yaml
+- name: Run JavaScript Security Scan
+  uses: jmanhype/rec-praxis-action@v1
+  with:
+    scan-type: 'all-js'
+    language: 'javascript'
+    severity: 'HIGH'
+    fail-on: 'CRITICAL'
+```
+
+**Available JavaScript/TypeScript Scan Types**:
+
+| Scan Type | Description | Tools Used |
+|-----------|-------------|------------|
+| `review-js` | Code review + type checking | ESLint (security plugin) + TypeScript compiler |
+| `audit-js` | Security audit only | ESLint with security rules |
+| `deps-js` | Dependency vulnerabilities | npm audit |
+| `all-js` | Comprehensive JS/TS scan | All of the above |
+
+**What It Detects**:
+
+**ESLint Security Scanning**:
+- Object injection vulnerabilities
+- Non-literal RegExp patterns (ReDoS risks)
+- Unsafe regex patterns
+- Buffer API misuse
+- Child process execution
+- Mustache escape bypasses
+- eval() with expressions
+- CSRF vulnerabilities
+- Timing attack vulnerabilities
+
+**npm audit**:
+- CVE vulnerabilities in npm packages
+- Critical and high-severity issues
+- Outdated dependencies with known exploits
+
+**TypeScript Compiler**:
+- Type errors that could lead to runtime bugs
+- Strict null checks
+- Type safety violations
+
+**Example Workflow for Node.js Project**:
+
+```yaml
+name: JavaScript Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Comprehensive JS Security Scan
+        uses: jmanhype/rec-praxis-action@v1
+        with:
+          scan-type: 'all-js'
+          language: 'javascript'
+          format: 'sarif'
+
+      - name: Upload ESLint SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: eslint-results.json
+          category: rec-praxis-eslint
+
+      - name: Upload npm audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit-results.json
+```
+
+**React/TypeScript Project**:
+
+```yaml
+- uses: jmanhype/rec-praxis-action@v1
+  with:
+    scan-type: 'review-js'  # ESLint + TypeScript compiler
+    language: 'typescript'
+    severity: 'MEDIUM'
+```
+
+**Monorepo with Mixed Languages**:
+
+```yaml
+jobs:
+  scan-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jmanhype/rec-praxis-action@v1
+        with:
+          scan-type: 'all'
+          files: 'backend/**/*.py'
+
+  scan-javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jmanhype/rec-praxis-action@v1
+        with:
+          scan-type: 'all-js'
+          language: 'javascript'
+```
+
 ## What It Detects
 
 ### Code Review
@@ -460,8 +580,8 @@ docker run -v $(pwd):/github/workspace rec-praxis-action all HIGH CRITICAL "*.py
 ## Requirements
 
 - GitHub Actions runner (ubuntu-latest, windows-latest, macos-latest)
-- Python files in repository
-- No additional setup required (Python + dependencies included in Docker image)
+- Python or JavaScript/TypeScript files in repository
+- No additional setup required (Python, Node.js, and all dependencies included in Docker image)
 
 ## Versioning
 

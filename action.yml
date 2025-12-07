@@ -7,9 +7,13 @@ branding:
 
 inputs:
   scan-type:
-    description: 'Type of scan to run: review, audit, deps, or all'
+    description: 'Type of scan to run: review, audit, deps, all, review-js, audit-js, deps-js, all-js'
     required: false
     default: 'all'
+  language:
+    description: 'Primary language to scan: python, javascript, typescript, or auto-detect'
+    required: false
+    default: 'python'
   severity:
     description: 'Minimum severity level (LOW, MEDIUM, HIGH, CRITICAL)'
     required: false
@@ -59,3 +63,4 @@ runs:
     - ${{ inputs.memory-dir }}
     - ${{ inputs.incremental }}
     - ${{ inputs.base-ref }}
+    - ${{ inputs.language }}

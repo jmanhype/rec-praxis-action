@@ -9,6 +9,7 @@ FORMAT="${5:-json}"
 MEMORY_DIR="${6:-.rec-praxis-rlm}"
 INCREMENTAL="${7:-false}"
 BASE_REF="${8:-origin/main}"
+LANGUAGE="${9:-python}"
 
 echo "::group::rec-praxis-rlm Configuration"
 echo "Scan type: $SCAN_TYPE"
@@ -19,6 +20,7 @@ echo "Format: $FORMAT"
 echo "Memory dir: $MEMORY_DIR"
 echo "Incremental: $INCREMENTAL"
 echo "Base ref: $BASE_REF"
+echo "Language: $LANGUAGE"
 echo "::endgroup::"
 
 # Find Python files based on incremental mode
@@ -122,6 +124,95 @@ run_dependency_scan() {
     echo "::endgroup::"
 }
 
+# JavaScript/TypeScript scanning functions
+run_eslint_scan() {
+    echo "::group::Running ESLint Security Scan"
+
+    # Find JS/TS files
+    JS_FILES=$(find . -name "*.js" -o -name "*.ts" -o -name "*.jsx" -o -name "*.tsx" | grep -v node_modules | tr '\n' ' ' || echo "")
+
+    if [ -z "$JS_FILES" ]; then
+        echo "No JavaScript/TypeScript files found"
+        echo "::endgroup::"
+        return 0
+    fi
+
+    # Install ESLint security plugins if package.json exists
+    if [ -f "package.json" ]; then
+        npm install --no-save eslint-plugin-security eslint-plugin-no-secrets 2>/dev/null || true
+    fi
+
+    # Run ESLint with security plugins
+    npx eslint \
+        --plugin security \
+        --rule 'security/detect-object-injection: warn' \
+        --rule 'security/detect-non-literal-regexp: warn' \
+        --rule 'security/detect-unsafe-regex: error' \
+        --rule 'security/detect-buffer-noassert: error' \
+        --rule 'security/detect-child-process: warn' \
+        --rule 'security/detect-disable-mustache-escape: error' \
+        --rule 'security/detect-eval-with-expression: error' \
+        --rule 'security/detect-no-csrf-before-method-override: error' \
+        --rule 'security/detect-possible-timing-attacks: warn' \
+        --format json \
+        $JS_FILES > eslint-results.json 2>/dev/null || true
+
+    # Count findings
+    if [ -f "eslint-results.json" ]; then
+        ESLINT_TOTAL=$(python3 -c "import sys, json; data=json.load(open('eslint-results.json')); print(sum(len(f.get('messages', [])) for f in data))" 2>/dev/null || echo "0")
+        ESLINT_BLOCKING=$(python3 -c "import sys, json; data=json.load(open('eslint-results.json')); print(sum(1 for f in data for m in f.get('messages', []) if m.get('severity') == 2))" 2>/dev/null || echo "0")
+        TOTAL_FINDINGS=$((TOTAL_FINDINGS + ESLINT_TOTAL))
+        BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + ESLINT_BLOCKING))
+        echo "Found $ESLINT_TOTAL issue(s), $ESLINT_BLOCKING errors"
+    fi
+    echo "::endgroup::"
+}
+
+run_npm_audit() {
+    echo "::group::Running npm audit"
+
+    if [ ! -f "package.json" ]; then
+        echo "No package.json found, skipping npm audit"
+        echo "::endgroup::"
+        return 0
+    fi
+
+    # Run npm audit
+    npm audit --json > npm-audit-results.json 2>/dev/null || true
+
+    # Count vulnerabilities
+    if [ -f "npm-audit-results.json" ]; then
+        NPM_CRITICAL=$(python3 -c "import sys, json; data=json.load(open('npm-audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('critical', 0))" 2>/dev/null || echo "0")
+        NPM_HIGH=$(python3 -c "import sys, json; data=json.load(open('npm-audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('high', 0))" 2>/dev/null || echo "0")
+        NPM_TOTAL=$((NPM_CRITICAL + NPM_HIGH))
+        TOTAL_FINDINGS=$((TOTAL_FINDINGS + NPM_TOTAL))
+        BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + NPM_CRITICAL))
+        echo "Found $NPM_TOTAL vulnerability(ies), $NPM_CRITICAL critical"
+    fi
+    echo "::endgroup::"
+}
+
+run_typescript_check() {
+    echo "::group::Running TypeScript Compiler Check"
+
+    if [ ! -f "tsconfig.json" ]; then
+        echo "No tsconfig.json found, skipping TypeScript check"
+        echo "::endgroup::"
+        return 0
+    fi
+
+    # Run TypeScript compiler
+    npx tsc --noEmit --pretty false > tsc-results.txt 2>&1 || true
+
+    # Count errors
+    if [ -f "tsc-results.txt" ]; then
+        TSC_ERRORS=$(grep -c "error TS" tsc-results.txt 2>/dev/null || echo "0")
+        TOTAL_FINDINGS=$((TOTAL_FINDINGS + TSC_ERRORS))
+        echo "Found $TSC_ERRORS type error(s)"
+    fi
+    echo "::endgroup::"
+}
+
 # Execute scans based on type
 case "$SCAN_TYPE" in
     review)
@@ -142,8 +233,27 @@ case "$SCAN_TYPE" in
         run_dependency_scan
         RESULTS_FILE="code-review-results.$FORMAT"
         ;;
+    review-js)
+        run_eslint_scan
+        run_typescript_check
+        RESULTS_FILE="eslint-results.json"
+        ;;
+    audit-js)
+        run_eslint_scan
+        RESULTS_FILE="eslint-results.json"
+        ;;
+    deps-js)
+        run_npm_audit
+        RESULTS_FILE="npm-audit-results.json"
+        ;;
+    all-js)
+        run_eslint_scan
+        run_typescript_check
+        run_npm_audit
+        RESULTS_FILE="eslint-results.json"
+        ;;
     *)
-        echo "::error::Invalid scan type: $SCAN_TYPE. Use: review, audit, deps, or all"
+        echo "::error::Invalid scan type: $SCAN_TYPE. Use: review, audit, deps, all, review-js, audit-js, deps-js, or all-js"
         exit 1
         ;;
 esac

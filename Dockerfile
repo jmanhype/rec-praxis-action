@@ -26,13 +26,19 @@ FROM python:3.11-slim
 LABEL maintainer="jmanhype"
 LABEL org.opencontainers.image.source="https://github.com/jmanhype/rec-praxis-action"
 LABEL org.opencontainers.image.description="Automated code review, security audit, and dependency scanning"
-LABEL org.opencontainers.image.version="1.1.0"
+LABEL org.opencontainers.image.version="1.2.0"
 
-# Install only runtime dependencies (git for incremental scanning)
+# Install runtime dependencies (git + Node.js for JS/TS scanning)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
+    apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g eslint typescript npm-audit-resolver \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
