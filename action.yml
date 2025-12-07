@@ -30,6 +30,14 @@ inputs:
     description: 'Directory for procedural memory storage'
     required: false
     default: '.rec-praxis-rlm'
+  incremental:
+    description: 'Only scan files changed in PR/commit (true/false)'
+    required: false
+    default: 'false'
+  base-ref:
+    description: 'Base git ref for incremental scan (default: origin/main)'
+    required: false
+    default: 'origin/main'
 
 outputs:
   total-findings:
@@ -49,3 +57,5 @@ runs:
     - ${{ inputs.files }}
     - ${{ inputs.format }}
     - ${{ inputs.memory-dir }}
+    - ${{ inputs.incremental }}
+    - ${{ inputs.base-ref }}

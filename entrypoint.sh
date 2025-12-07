@@ -7,6 +7,8 @@ FAIL_ON="${3:-CRITICAL}"
 FILES="${4:-**/*.py}"
 FORMAT="${5:-json}"
 MEMORY_DIR="${6:-.rec-praxis-rlm}"
+INCREMENTAL="${7:-false}"
+BASE_REF="${8:-origin/main}"
 
 echo "::group::rec-praxis-rlm Configuration"
 echo "Scan type: $SCAN_TYPE"
@@ -15,11 +17,48 @@ echo "Fail on: $FAIL_ON"
 echo "Files: $FILES"
 echo "Format: $FORMAT"
 echo "Memory dir: $MEMORY_DIR"
+echo "Incremental: $INCREMENTAL"
+echo "Base ref: $BASE_REF"
 echo "::endgroup::"
 
-# Find Python files if using glob pattern
-if [[ "$FILES" == *"*"* ]]; then
-    echo "::group::Finding Python files"
+# Find Python files based on incremental mode
+if [[ "$INCREMENTAL" == "true" ]]; then
+    echo "::group::Finding Changed Python Files (Incremental Mode)"
+
+    # Fetch base ref to ensure we have it
+    git fetch origin --depth=1 2>/dev/null || echo "Warning: Could not fetch origin"
+
+    # Get list of changed Python files compared to base ref
+    CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR "$BASE_REF"...HEAD | grep '\.py$' || true)
+
+    if [ -z "$CHANGED_FILES" ]; then
+        echo "No Python files changed in this PR/commit"
+        echo "::endgroup::"
+        echo "total-findings=0" >> $GITHUB_OUTPUT
+        echo "blocking-findings=0" >> $GITHUB_OUTPUT
+        echo "results-file=" >> $GITHUB_OUTPUT
+        echo "::notice::No Python files to scan (incremental mode)"
+        exit 0
+    fi
+
+    # Filter by patterns if specified
+    if [[ "$FILES" != "**/*.py" ]]; then
+        echo "Filtering changed files by pattern: $FILES"
+        PYTHON_FILES=""
+        for file in $CHANGED_FILES; do
+            if [[ "$file" == $FILES ]]; then
+                PYTHON_FILES="$PYTHON_FILES $file"
+            fi
+        done
+        PYTHON_FILES=$(echo "$PYTHON_FILES" | tr '\n' ' ' | xargs)
+    else
+        PYTHON_FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ' | xargs)
+    fi
+
+    echo "Changed files to scan: $PYTHON_FILES"
+    echo "::endgroup::"
+elif [[ "$FILES" == *"*"* ]]; then
+    echo "::group::Finding Python Files (Full Scan Mode)"
     PYTHON_FILES=$(find . -name "*.py" -type f | grep -v ".venv" | grep -v "venv" | grep -v "node_modules" | tr '\n' ' ')
     echo "Found files: $PYTHON_FILES"
     echo "::endgroup::"

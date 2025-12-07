@@ -43,6 +43,8 @@ jobs:
 | `files` | Files or patterns to scan (space-separated) | `**/*.py` |
 | `format` | Output format: `json`, `toon`, `sarif`, or `text` | `json` |
 | `memory-dir` | Directory for procedural memory storage | `.rec-praxis-rlm` |
+| `incremental` | Only scan files changed in PR/commit (true/false) | `false` |
+| `base-ref` | Base git ref for incremental scan | `origin/main` |
 
 ## Outputs
 
@@ -79,6 +81,43 @@ jobs:
   with:
     scan-type: 'deps'
     files: 'src/**/*.py tests/**/*.py'
+```
+
+### Incremental Scanning (Changed Files Only)
+
+Scan only files modified in the PR - significantly faster for large codebases:
+
+```yaml
+- uses: jmanhype/rec-praxis-action@v1
+  with:
+    incremental: 'true'
+    base-ref: 'origin/main'  # Compare against main branch
+```
+
+**Benefits**:
+- 10-100x faster for large repositories
+- Only scans files actually changed in the PR
+- Perfect for pull request workflows
+- Uses git diff to detect changes
+
+**Example for PR workflow**:
+```yaml
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git diff
+
+      - uses: jmanhype/rec-praxis-action@v1
+        with:
+          incremental: 'true'
+          base-ref: 'origin/${{ github.base_ref }}'
 ```
 
 ### TOON Format (Token-Efficient)
