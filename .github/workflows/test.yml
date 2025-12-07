@@ -8,15 +8,12 @@ on:
 
 jobs:
   test-action:
-    name: Test Action on rec-praxis-rlm Repository
+    name: Test Action Self-Test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout rec-praxis-rlm for testing
+      - name: Checkout this repository
         uses: actions/checkout@v4
-        with:
-          repository: jmanhype/rec-praxis-rlm
-          path: test-repo
 
       - name: Test rec-praxis-action (Code Review)
         uses: ./
