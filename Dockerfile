@@ -10,7 +10,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install rec-praxis-rlm with all optional dependencies
-RUN pip install --no-cache-dir rec-praxis-rlm[all]==0.4.2
+RUN pip install --no-cache-dir rec-praxis-rlm[all]==0.4.3
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
