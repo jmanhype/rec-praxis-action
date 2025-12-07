@@ -148,6 +148,24 @@ case "$SCAN_TYPE" in
         ;;
 esac
 
+# Compress SARIF files if format is sarif (reduces artifact storage by ~70%)
+if [ "$FORMAT" = "sarif" ]; then
+    echo "::group::Compressing SARIF Files"
+    for sarif_file in *.sarif; do
+        if [ -f "$sarif_file" ]; then
+            gzip -k "$sarif_file"  # Keep original + create .gz
+            original_size=$(stat -f%z "$sarif_file" 2>/dev/null || stat -c%s "$sarif_file" 2>/dev/null || echo "0")
+            compressed_size=$(stat -f%z "$sarif_file.gz" 2>/dev/null || stat -c%s "$sarif_file.gz" 2>/dev/null || echo "0")
+
+            if [ "$original_size" -gt 0 ]; then
+                reduction=$((100 - (compressed_size * 100 / original_size)))
+                echo "Compressed $sarif_file: ${original_size}B → ${compressed_size}B (${reduction}% reduction)"
+            fi
+        fi
+    done
+    echo "::endgroup::"
+fi
+
 # Set outputs
 echo "total-findings=$TOTAL_FINDINGS" >> $GITHUB_OUTPUT
 echo "blocking-findings=$BLOCKING_FINDINGS" >> $GITHUB_OUTPUT
@@ -157,6 +175,9 @@ echo "results-file=$RESULTS_FILE" >> $GITHUB_OUTPUT
 echo "::group::Summary"
 echo "Total findings: $TOTAL_FINDINGS"
 echo "Blocking findings: $BLOCKING_FINDINGS"
+if [ "$FORMAT" = "sarif" ]; then
+    echo "SARIF files compressed (gzip) for efficient artifact storage"
+fi
 echo "::endgroup::"
 
 # Fail if blocking findings exist
