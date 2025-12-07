@@ -39,9 +39,9 @@ run_code_review() {
         --memory-dir="$MEMORY_DIR" \
         --format="$FORMAT" > code-review-results.$FORMAT || true
 
-    if [ "$FORMAT" = "json" ]; then
-        REVIEW_TOTAL=$(cat code-review-results.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('total_findings', 0))")
-        REVIEW_BLOCKING=$(cat code-review-results.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('blocking_findings', 0))")
+    if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
+        REVIEW_TOTAL=$(cat code-review-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data.get('runs', [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
+        REVIEW_BLOCKING=$(cat code-review-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('runs', [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
         TOTAL_FINDINGS=$((TOTAL_FINDINGS + REVIEW_TOTAL))
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + REVIEW_BLOCKING))
         echo "Found $REVIEW_TOTAL issue(s), $REVIEW_BLOCKING blocking"
@@ -56,9 +56,9 @@ run_security_audit() {
         --memory-dir="$MEMORY_DIR" \
         --format="$FORMAT" > security-audit-results.$FORMAT || true
 
-    if [ "$FORMAT" = "json" ]; then
-        AUDIT_TOTAL=$(cat security-audit-results.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('total_findings', 0))")
-        AUDIT_BLOCKING=$(cat security-audit-results.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('blocking_findings', 0))")
+    if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
+        AUDIT_TOTAL=$(cat security-audit-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data.get('runs', [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
+        AUDIT_BLOCKING=$(cat security-audit-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('runs', [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
         TOTAL_FINDINGS=$((TOTAL_FINDINGS + AUDIT_TOTAL))
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + AUDIT_BLOCKING))
         echo "Found $AUDIT_TOTAL issue(s), $AUDIT_BLOCKING critical"
@@ -73,9 +73,9 @@ run_dependency_scan() {
         --memory-dir="$MEMORY_DIR" \
         --format="$FORMAT" > dependency-scan-results.$FORMAT || true
 
-    if [ "$FORMAT" = "json" ]; then
-        DEPS_TOTAL=$(cat dependency-scan-results.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('total_findings', 0))")
-        DEPS_BLOCKING=$(cat dependency-scan-results.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('blocking_findings', 0))")
+    if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
+        DEPS_TOTAL=$(cat dependency-scan-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data.get('runs', [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
+        DEPS_BLOCKING=$(cat dependency-scan-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('runs', [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
         TOTAL_FINDINGS=$((TOTAL_FINDINGS + DEPS_TOTAL))
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + DEPS_BLOCKING))
         echo "Found $DEPS_TOTAL issue(s), $DEPS_BLOCKING critical"

@@ -41,7 +41,7 @@ jobs:
 | `severity` | Minimum severity to report (LOW, MEDIUM, HIGH, CRITICAL) | `HIGH` |
 | `fail-on` | Fail build at this severity or higher | `CRITICAL` |
 | `files` | Files or patterns to scan (space-separated) | `**/*.py` |
-| `format` | Output format: `json`, `toon`, or `text` | `json` |
+| `format` | Output format: `json`, `toon`, `sarif`, or `text` | `json` |
 | `memory-dir` | Directory for procedural memory storage | `.rec-praxis-rlm` |
 
 ## Outputs
@@ -96,6 +96,36 @@ Save LLM tokens when processing results with AI:
     name: security-scan-results
     path: '*.toon'
 ```
+
+### SARIF Output for GitHub Security Tab
+
+Integrate findings directly into GitHub Security tab (Code Scanning):
+
+```yaml
+- uses: jmanhype/rec-praxis-action@v1
+  with:
+    format: 'sarif'
+
+- name: Upload SARIF to GitHub Security
+  if: always()
+  uses: github/codeql-action/upload-sarif@v2
+  with:
+    sarif_file: code-review-results.sarif
+    category: rec-praxis-code-review
+
+- name: Upload Security Audit SARIF
+  if: always()
+  uses: github/codeql-action/upload-sarif@v2
+  with:
+    sarif_file: security-audit-results.sarif
+    category: rec-praxis-security-audit
+```
+
+**Benefits**:
+- Findings appear in GitHub Security tab alongside CodeQL and Dependabot
+- Automatic OWASP/CWE categorization
+- Filterable by severity (error = CRITICAL/HIGH, warning = MEDIUM/LOW)
+- Trackable across commits
 
 ### Full Workflow with Artifacts
 
