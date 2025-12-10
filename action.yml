@@ -42,6 +42,14 @@ inputs:
     description: 'Base git ref for incremental scan (default: origin/main)'
     required: false
     default: 'origin/main'
+  use-llm:
+    description: 'Enable LLM-powered deep analysis (requires API key and rec-praxis-rlm v0.10.0+). Set to true for context-aware vulnerability detection using DSPy. Note: Pending upstream implementation.'
+    required: false
+    default: 'false'
+  lm-model:
+    description: 'Language model to use when use-llm is true. Options: groq/llama-3.3-70b-versatile (fast/cheap), openai/gpt-4o-mini (accurate), openai/gpt-4o (best)'
+    required: false
+    default: 'groq/llama-3.3-70b-versatile'
 
 outputs:
   total-findings:
@@ -64,3 +72,5 @@ runs:
     - ${{ inputs.incremental }}
     - ${{ inputs.base-ref }}
     - ${{ inputs.language }}
+    - ${{ inputs.use-llm }}
+    - ${{ inputs.lm-model }}

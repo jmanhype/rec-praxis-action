@@ -10,6 +10,7 @@ Automated code review, security auditing, and dependency scanning powered by pro
 - **🧠 Procedural Memory**: Learns from past fixes and improves recommendations over time
 - **⚡ Token-Efficient**: Optional TOON format reduces LLM token usage by 40-50%
 - **🌐 Polyglot Support**: Python and JavaScript/TypeScript scanning with dedicated security tools
+- **🤖 LLM-Powered Analysis** (Coming in v0.10.0): Deep semantic analysis using Groq, OpenAI, or LiteLLM models via DSPy
 
 ## Quick Start
 
@@ -600,6 +601,55 @@ uses: jmanhype/rec-praxis-action@v1.0.0  # Specific version
 uses: jmanhype/rec-praxis-action@v1      # Latest v1.x
 uses: jmanhype/rec-praxis-action@main    # Latest (unstable)
 ```
+
+## LLM-Powered Analysis (Roadmap)
+
+### Status: Pending Upstream Implementation
+
+The Action includes inputs for LLM-powered deep analysis, but this feature requires changes to the upstream `rec-praxis-rlm` package first.
+
+### What's Coming in v0.10.0
+
+**Deep Semantic Analysis** using DSPy with:
+- Business logic vulnerability detection
+- Context-aware SQL injection analysis
+- Authentication/authorization flaw detection
+- Data flow and taint analysis
+- Race condition detection
+- API misuse identification
+
+### Supported LLM Providers
+
+- **Groq** (`groq/llama-3.3-70b-versatile`) - Fast & cheap (~$0.01-0.03 per 1000 lines)
+- **OpenAI** (`openai/gpt-4o-mini`, `openai/gpt-4o`) - Most accurate (~$0.05-0.10 per 1000 lines)
+- **LiteLLM** - 100+ providers via unified API
+- **OpenRouter** - Access to multiple models with fallback routing
+
+### Future Usage (Once Implemented)
+
+```yaml
+- uses: jmanhype/rec-praxis-action@v1
+  with:
+    scan-type: 'all'
+    use-llm: 'true'  # Enable LLM analysis
+    lm-model: 'groq/llama-3.3-70b-versatile'
+  env:
+    GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+```
+
+### Implementation Plan
+
+To add LLM support to rec-praxis-rlm:
+
+1. Add `--use-llm` and `--lm-model` flags to `rec-praxis-review` and `rec-praxis-audit` CLIs
+2. Create `CodeReviewAgentLLM` and `SecurityAuditAgentLLM` classes
+3. Integrate DSPy `PraxisRLMPlanner` for semantic analysis
+4. Combine pattern-based + LLM findings with deduplication
+5. Add integration tests with Groq/OpenAI
+
+**Estimated effort**: ~330 lines of code across 5 files
+
+See implementation plan above for details.
 
 ## Related Projects
 

@@ -12,6 +12,8 @@ MEMORY_DIR="${6:-.rec-praxis-rlm}"
 INCREMENTAL="${7:-false}"
 BASE_REF="${8:-origin/main}"
 LANGUAGE="${9:-python}"
+USE_LLM="${10:-false}"
+LM_MODEL="${11:-groq/llama-3.3-70b-versatile}"
 
 echo "::group::rec-praxis-rlm Configuration"
 echo "Scan type: $SCAN_TYPE"
@@ -23,6 +25,10 @@ echo "Memory dir: $MEMORY_DIR"
 echo "Incremental: $INCREMENTAL"
 echo "Base ref: $BASE_REF"
 echo "Language: $LANGUAGE"
+echo "Use LLM: $USE_LLM"
+if [ "$USE_LLM" = "true" ]; then
+    echo "LLM Model: $LM_MODEL"
+fi
 echo "::endgroup::"
 
 PYTHON_FILES=()
