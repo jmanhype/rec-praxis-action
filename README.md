@@ -40,15 +40,19 @@ jobs:
 |-------|-------------|---------|
 | `scan-type` | Type of scan: `review`, `audit`, `deps`, `all`, `review-js`, `audit-js`, `deps-js`, `all-js` | `all` |
 | `language` | Primary language: `python`, `javascript`, `typescript`, or `auto-detect` | `python` |
-| `severity` | Minimum severity to report (LOW, MEDIUM, HIGH, CRITICAL) | `HIGH` |
-| `fail-on` | Fail build at this severity or higher | `CRITICAL` |
+| `severity` | Minimum severity to report (LOW, MEDIUM, HIGH, CRITICAL). **Note:** Only applies to `review` scans; `audit` and `deps` return all findings. | `HIGH` |
+| `fail-on` | Fail build at this severity or higher. Applied to all scan types via CLI (`audit`/`deps`) or post-processing (`review`). | `CRITICAL` |
 | `files` | Files or glob patterns to scan (space-separated; skips `.venv`, `venv`, `node_modules`) | `**/*.py` |
 | `format` | Output format: `json`, `toon`, `sarif`, or `text` | `json` |
 | `memory-dir` | Directory for procedural memory storage | `.rec-praxis-rlm` |
 | `incremental` | Only scan files changed in PR/commit (true/false) | `false` |
 | `base-ref` | Base git ref for incremental scan | `origin/main` |
 
-Notes:
+**Notes:**
+- **CLI Parameter Support (rec-praxis-rlm v0.9.2):**
+  - `rec-praxis-review`: Supports `--severity` (filters findings)
+  - `rec-praxis-audit`: Supports `--fail-on` (filters by threshold)
+  - `rec-praxis-deps`: Supports `--fail-on` and `--files` (scoped scanning)
 - For `format: json` or `sarif`, findings are parsed and surfaced via outputs; for `format: text` or `toon`, the CLI's exit code controls failure and counts are not parsed.
 
 ## Outputs

@@ -119,6 +119,7 @@ run_security_audit() {
     echo "::group::Running Security Audit"
     if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
         rec-praxis-audit "${PYTHON_FILES[@]}" \
+            --fail-on="$FAIL_ON" \
             --memory-dir="$MEMORY_DIR" \
             --format="$FORMAT" > security-audit-results.$FORMAT || true
 
@@ -129,6 +130,7 @@ run_security_audit() {
         echo "Found $AUDIT_TOTAL issue(s), $AUDIT_BLOCKING blocking"
     else
         rec-praxis-audit "${PYTHON_FILES[@]}" \
+            --fail-on="$FAIL_ON" \
             --memory-dir="$MEMORY_DIR" \
             --format="$FORMAT" > security-audit-results.$FORMAT
     fi
@@ -138,7 +140,8 @@ run_security_audit() {
 run_dependency_scan() {
     echo "::group::Running Dependency & Secret Scan"
     if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
-        rec-praxis-deps "${PYTHON_FILES[@]}" \
+        rec-praxis-deps --files "${PYTHON_FILES[@]}" \
+            --fail-on="$FAIL_ON" \
             --memory-dir="$MEMORY_DIR" \
             --format="$FORMAT" > dependency-scan-results.$FORMAT || true
 
@@ -148,7 +151,8 @@ run_dependency_scan() {
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + DEPS_BLOCKING))
         echo "Found $DEPS_TOTAL issue(s), $DEPS_BLOCKING blocking"
     else
-        rec-praxis-deps "${PYTHON_FILES[@]}" \
+        rec-praxis-deps --files "${PYTHON_FILES[@]}" \
+            --fail-on="$FAIL_ON" \
             --memory-dir="$MEMORY_DIR" \
             --format="$FORMAT" > dependency-scan-results.$FORMAT
     fi

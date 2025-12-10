@@ -18,7 +18,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy only requirements first (better layer caching)
 # This layer is cached unless rec-praxis-rlm version changes
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir rec-praxis-rlm[all]==0.4.3
+    pip install --no-cache-dir rec-praxis-rlm[all]==0.9.2
 
 # Stage 2: Runtime image (minimal)
 FROM python:3.11-slim
