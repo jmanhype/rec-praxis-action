@@ -54,9 +54,7 @@ RUN chmod +x /entrypoint.sh
 # Create memory directory with proper permissions
 RUN mkdir -p /.rec-praxis-rlm && chmod 777 /.rec-praxis-rlm
 
-# Non-root user for security
-RUN useradd -m -u 1000 scanner && \
-    chown -R scanner:scanner /github/workspace
-USER scanner
+# Note: GitHub Actions Docker containers run as root by default
+# The workspace is mounted at runtime with appropriate permissions
 
 ENTRYPOINT ["/entrypoint.sh"]
