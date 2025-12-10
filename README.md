@@ -42,11 +42,14 @@ jobs:
 | `language` | Primary language: `python`, `javascript`, `typescript`, or `auto-detect` | `python` |
 | `severity` | Minimum severity to report (LOW, MEDIUM, HIGH, CRITICAL) | `HIGH` |
 | `fail-on` | Fail build at this severity or higher | `CRITICAL` |
-| `files` | Files or patterns to scan (space-separated) | `**/*.py` |
+| `files` | Files or glob patterns to scan (space-separated; skips `.venv`, `venv`, `node_modules`) | `**/*.py` |
 | `format` | Output format: `json`, `toon`, `sarif`, or `text` | `json` |
 | `memory-dir` | Directory for procedural memory storage | `.rec-praxis-rlm` |
 | `incremental` | Only scan files changed in PR/commit (true/false) | `false` |
 | `base-ref` | Base git ref for incremental scan | `origin/main` |
+
+Notes:
+- For `format: json` or `sarif`, findings are parsed and surfaced via outputs; for `format: text` or `toon`, the CLI's exit code controls failure and counts are not parsed.
 
 ## Outputs
 
@@ -54,7 +57,7 @@ jobs:
 |--------|-------------|
 | `total-findings` | Total number of issues found across all scans |
 | `blocking-findings` | Number of issues at fail-on severity or higher |
-| `results-file` | Path to the results file (for artifact upload) |
+| `results-file` | Path to the results file (for artifact upload; for `scan-type: all` this points to an index JSON of all outputs) |
 
 ## Usage Examples
 
@@ -84,6 +87,7 @@ jobs:
     scan-type: 'deps'
     files: 'src/**/*.py tests/**/*.py'
 ```
+Glob patterns are expanded and passed directly to the CLI so you can scope dependency scans to specific paths.
 
 ### Incremental Scanning (Changed Files Only)
 

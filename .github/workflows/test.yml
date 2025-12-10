@@ -55,3 +55,101 @@ jobs:
           path: |
             *.json
             *.toon
+
+  verify-fail-on:
+    name: Verify fail-on behavior across formats
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: All scans with fail-on=LOW (json)
+        id: low-json
+        uses: ./
+        with:
+          scan-type: 'all'
+          severity: 'LOW'
+          fail-on: 'LOW'
+          format: 'json'
+        continue-on-error: true
+
+      - name: Assert fail-on=LOW caused failure (json)
+        if: steps.low-json.outcome == 'success'
+        run: |
+          echo "Expected step low-json to fail, but it succeeded" >&2
+          exit 1
+
+      - name: All scans with fail-on=LOW (toon)
+        id: low-toon
+        uses: ./
+        with:
+          scan-type: 'all'
+          severity: 'LOW'
+          fail-on: 'LOW'
+          format: 'toon'
+        continue-on-error: true
+
+      - name: Assert fail-on=LOW caused failure (toon)
+        if: steps.low-toon.outcome == 'success'
+        run: |
+          echo "Expected step low-toon to fail, but it succeeded" >&2
+          exit 1
+
+  verify-files-input:
+    name: Verify files glob scoping
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create fixture files
+        run: |
+          mkdir -p tests demo
+          echo "print('test file')" > tests/test_file.py
+          echo "print('demo file')" > demo/demo_file.py
+
+      - name: Run review only on tests/**/*.py
+        uses: ./
+        with:
+          scan-type: 'review'
+          files: 'tests/**/*.py'
+          format: 'json'
+          severity: 'LOW'
+          fail-on: 'CRITICAL'
+        continue-on-error: true
+
+      - name: Ensure demo directory not scanned
+        run: |
+          if [ -f code-review-results.json ]; then
+            if grep -q "demo/demo_file.py" code-review-results.json; then
+              echo "demo/demo_file.py was scanned but files was set to tests/**/*.py" >&2
+              exit 1
+            fi
+          else
+            echo "code-review-results.json not found" >&2
+            exit 1
+          fi
+
+  verify-sarif:
+    name: Verify SARIF output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run code review with SARIF
+        uses: ./
+        with:
+          scan-type: 'review'
+          format: 'sarif'
+          severity: 'LOW'
+          fail-on: 'HIGH'
+        continue-on-error: true
+
+      - name: Check SARIF file exists and is parseable
+        run: |
+          test -f code-review-results.sarif
+          python - << 'PY'
+          import json
+          with open("code-review-results.sarif") as f:
+              data = json.load(f)
+          runs = data.get("runs", [])
+          print(f"Found {len(runs)} run(s) in SARIF")
+          PY

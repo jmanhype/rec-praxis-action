@@ -27,7 +27,7 @@ inputs:
     required: false
     default: '**/*.py'
   format:
-    description: 'Output format: json, toon, or text'
+    description: 'Output format: json, sarif, toon, or text'
     required: false
     default: 'json'
   memory-dir:

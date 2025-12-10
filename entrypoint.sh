@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+shopt -s nullglob globstar
+
 SCAN_TYPE="${1:-all}"
 SEVERITY="${2:-HIGH}"
 FAIL_ON="${3:-CRITICAL}"
@@ -23,6 +25,8 @@ echo "Base ref: $BASE_REF"
 echo "Language: $LANGUAGE"
 echo "::endgroup::"
 
+PYTHON_FILES=()
+
 # Find Python files based on incremental mode
 if [[ "$INCREMENTAL" == "true" ]]; then
     echo "::group::Finding Changed Python Files (Incremental Mode)"
@@ -31,9 +35,9 @@ if [[ "$INCREMENTAL" == "true" ]]; then
     git fetch origin --depth=1 2>/dev/null || echo "Warning: Could not fetch origin"
 
     # Get list of changed Python files compared to base ref
-    CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR "$BASE_REF"...HEAD | grep '\.py$' || true)
+    mapfile -t CHANGED_FILES < <(git diff --name-only --diff-filter=ACMR "$BASE_REF"...HEAD | grep '\.py$' || true)
 
-    if [ -z "$CHANGED_FILES" ]; then
+    if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
         echo "No Python files changed in this PR/commit"
         echo "::endgroup::"
         echo "total-findings=0" >> $GITHUB_OUTPUT
@@ -46,26 +50,42 @@ if [[ "$INCREMENTAL" == "true" ]]; then
     # Filter by patterns if specified
     if [[ "$FILES" != "**/*.py" ]]; then
         echo "Filtering changed files by pattern: $FILES"
-        PYTHON_FILES=""
-        for file in $CHANGED_FILES; do
-            if [[ "$file" == $FILES ]]; then
-                PYTHON_FILES="$PYTHON_FILES $file"
-            fi
+        for file in "${CHANGED_FILES[@]}"; do
+            for pattern in $FILES; do
+                if [[ "$file" == $pattern ]]; then
+                    PYTHON_FILES+=("$file")
+                    break
+                fi
+            done
         done
-        PYTHON_FILES=$(echo "$PYTHON_FILES" | tr '\n' ' ' | xargs)
     else
-        PYTHON_FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ' | xargs)
+        PYTHON_FILES=("${CHANGED_FILES[@]}")
     fi
 
-    echo "Changed files to scan: $PYTHON_FILES"
+    echo "Changed files to scan: ${PYTHON_FILES[*]}"
     echo "::endgroup::"
 elif [[ "$FILES" == *"*"* ]]; then
     echo "::group::Finding Python Files (Full Scan Mode)"
-    PYTHON_FILES=$(find . -name "*.py" -type f | grep -v ".venv" | grep -v "venv" | grep -v "node_modules" | tr '\n' ' ')
-    echo "Found files: $PYTHON_FILES"
+    for pattern in $FILES; do
+        for f in $pattern; do
+            case "$f" in
+                */.venv/*|*/venv/*|*/node_modules/*) continue ;;
+            esac
+            PYTHON_FILES+=("$f")
+        done
+    done
+    echo "Found files: ${PYTHON_FILES[*]}"
     echo "::endgroup::"
 else
-    PYTHON_FILES="$FILES"
+    read -r -a PYTHON_FILES <<< "$FILES"
+fi
+
+if [ ${#PYTHON_FILES[@]} -eq 0 ]; then
+    echo "::notice::No Python files matched the provided patterns"
+    echo "total-findings=0" >> $GITHUB_OUTPUT
+    echo "blocking-findings=0" >> $GITHUB_OUTPUT
+    echo "results-file=" >> $GITHUB_OUTPUT
+    exit 0
 fi
 
 # Run the appropriate scan(s)
@@ -75,51 +95,72 @@ RESULTS_FILE=""
 
 run_code_review() {
     echo "::group::Running Code Review"
-    rec-praxis-review $PYTHON_FILES \
-        --severity="$SEVERITY" \
-        --memory-dir="$MEMORY_DIR" \
-        --format="$FORMAT" > code-review-results.$FORMAT || true
-
     if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
-        REVIEW_TOTAL=$(cat code-review-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data.get('runs', [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
-        REVIEW_BLOCKING=$(cat code-review-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('runs', [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
+        rec-praxis-review "${PYTHON_FILES[@]}" \
+            --severity="$SEVERITY" \
+            --fail-on="$FAIL_ON" \
+            --memory-dir="$MEMORY_DIR" \
+            --format="$FORMAT" > code-review-results.$FORMAT || true
+
+        REVIEW_TOTAL=$(cat code-review-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len((data.get('runs') or [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
+        REVIEW_BLOCKING=$(cat code-review-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in (data.get('runs') or [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
         TOTAL_FINDINGS=$((TOTAL_FINDINGS + REVIEW_TOTAL))
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + REVIEW_BLOCKING))
         echo "Found $REVIEW_TOTAL issue(s), $REVIEW_BLOCKING blocking"
+    else
+        rec-praxis-review "${PYTHON_FILES[@]}" \
+            --severity="$SEVERITY" \
+            --fail-on="$FAIL_ON" \
+            --memory-dir="$MEMORY_DIR" \
+            --format="$FORMAT" > code-review-results.$FORMAT
     fi
     echo "::endgroup::"
 }
 
 run_security_audit() {
     echo "::group::Running Security Audit"
-    rec-praxis-audit $PYTHON_FILES \
-        --fail-on="$FAIL_ON" \
-        --memory-dir="$MEMORY_DIR" \
-        --format="$FORMAT" > security-audit-results.$FORMAT || true
-
     if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
-        AUDIT_TOTAL=$(cat security-audit-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data.get('runs', [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
-        AUDIT_BLOCKING=$(cat security-audit-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('runs', [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
+        rec-praxis-audit "${PYTHON_FILES[@]}" \
+            --severity="$SEVERITY" \
+            --fail-on="$FAIL_ON" \
+            --memory-dir="$MEMORY_DIR" \
+            --format="$FORMAT" > security-audit-results.$FORMAT || true
+
+        AUDIT_TOTAL=$(cat security-audit-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len((data.get('runs') or [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
+        AUDIT_BLOCKING=$(cat security-audit-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in (data.get('runs') or [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
         TOTAL_FINDINGS=$((TOTAL_FINDINGS + AUDIT_TOTAL))
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + AUDIT_BLOCKING))
-        echo "Found $AUDIT_TOTAL issue(s), $AUDIT_BLOCKING critical"
+        echo "Found $AUDIT_TOTAL issue(s), $AUDIT_BLOCKING blocking"
+    else
+        rec-praxis-audit "${PYTHON_FILES[@]}" \
+            --severity="$SEVERITY" \
+            --fail-on="$FAIL_ON" \
+            --memory-dir="$MEMORY_DIR" \
+            --format="$FORMAT" > security-audit-results.$FORMAT
     fi
     echo "::endgroup::"
 }
 
 run_dependency_scan() {
     echo "::group::Running Dependency & Secret Scan"
-    rec-praxis-deps \
-        --fail-on="$FAIL_ON" \
-        --memory-dir="$MEMORY_DIR" \
-        --format="$FORMAT" > dependency-scan-results.$FORMAT || true
-
     if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "sarif" ]; then
-        DEPS_TOTAL=$(cat dependency-scan-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len(data.get('runs', [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
-        DEPS_BLOCKING=$(cat dependency-scan-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('runs', [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
+        rec-praxis-deps "${PYTHON_FILES[@]}" \
+            --severity="$SEVERITY" \
+            --fail-on="$FAIL_ON" \
+            --memory-dir="$MEMORY_DIR" \
+            --format="$FORMAT" > dependency-scan-results.$FORMAT || true
+
+        DEPS_TOTAL=$(cat dependency-scan-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(len((data.get('runs') or [{}])[0].get('results', [])) if '$FORMAT' == 'sarif' else data.get('total_findings', 0))")
+        DEPS_BLOCKING=$(cat dependency-scan-results.$FORMAT | python3 -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in (data.get('runs') or [{}])[0].get('results', []) if r.get('level') == 'error') if '$FORMAT' == 'sarif' else data.get('blocking_findings', 0))")
         TOTAL_FINDINGS=$((TOTAL_FINDINGS + DEPS_TOTAL))
         BLOCKING_FINDINGS=$((BLOCKING_FINDINGS + DEPS_BLOCKING))
-        echo "Found $DEPS_TOTAL issue(s), $DEPS_BLOCKING critical"
+        echo "Found $DEPS_TOTAL issue(s), $DEPS_BLOCKING blocking"
+    else
+        rec-praxis-deps "${PYTHON_FILES[@]}" \
+            --severity="$SEVERITY" \
+            --fail-on="$FAIL_ON" \
+            --memory-dir="$MEMORY_DIR" \
+            --format="$FORMAT" > dependency-scan-results.$FORMAT
     fi
     echo "::endgroup::"
 }
@@ -257,6 +298,17 @@ case "$SCAN_TYPE" in
         exit 1
         ;;
 esac
+
+if [ "$SCAN_TYPE" = "all" ]; then
+    cat > rec-praxis-results-index.json <<EOF
+{
+  "code_review": "code-review-results.$FORMAT",
+  "security_audit": "security-audit-results.$FORMAT",
+  "dependency_scan": "dependency-scan-results.$FORMAT"
+}
+EOF
+    RESULTS_FILE="rec-praxis-results-index.json"
+fi
 
 # Compress SARIF files if format is sarif (reduces artifact storage by ~70%)
 if [ "$FORMAT" = "sarif" ]; then
