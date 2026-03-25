@@ -1,24 +1,54 @@
-# rec-praxis-rlm Security Scanner GitHub Action
+# rec-praxis-action
 
-Automated code review, security auditing, and dependency scanning powered by procedural memory AI agents. Integrates rec-praxis-rlm into your CI/CD pipeline with zero configuration.
+GitHub Action that runs `rec-praxis-rlm` code review, security audit, and dependency scanning in CI. Ships as a Docker container with Python 3.11, Node.js 20, and all scanner dependencies pre-installed.
 
-## Features
+| | |
+|---|---|
+| Version | 1.2.0 |
+| Base image | python:3.11-slim (multi-stage) |
+| Scanner version | rec-praxis-rlm 0.9.2 |
+| Languages | Python, JavaScript, TypeScript |
+| License | MIT |
 
-- **🔍 Code Review**: Pattern-based detection of code quality issues with AI-powered suggestions
-- **🔒 Security Audit**: OWASP Top 10 detection, CWE mapping, vulnerability identification
-- **📦 Dependency Scanning**: CVE detection in Python and npm packages + secret/credential scanning
-- **🧠 Procedural Memory**: Learns from past fixes and improves recommendations over time
-- **⚡ Token-Efficient**: Optional TOON format reduces LLM token usage by 40-50%
-- **🌐 Polyglot Support**: Python and JavaScript/TypeScript scanning with dedicated security tools
-- **🤖 LLM-Powered Analysis** (Coming in v0.10.0): Deep semantic analysis using Groq, OpenAI, or LiteLLM models via DSPy
+## What it does
 
-## Quick Start
+Wraps 3 CLI tools from `rec-praxis-rlm` into a single GitHub Action:
 
-Add to your workflow `.github/workflows/security-scan.yml`:
+| Scan type | Tool | What it checks |
+|---|---|---|
+| `review` | `rec-praxis-review` | Code quality patterns, style issues |
+| `audit` | `rec-praxis-audit` | OWASP Top 10, CWE-mapped vulnerabilities |
+| `deps` | `rec-praxis-deps` | Known CVEs in dependencies, hardcoded secrets |
+| `all` | All 3 above | Combined scan |
+
+JS/TS variants available: `review-js`, `audit-js`, `deps-js`, `all-js`.
+
+## Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `scan-type` | string | `all` | `review`, `audit`, `deps`, `all` (and `-js` variants) |
+| `language` | string | `python` | `python`, `javascript`, `typescript`, `auto-detect` |
+| `severity` | string | `HIGH` | Minimum severity to report. Only applies to `review` scans. |
+| `fail-on` | string | `CRITICAL` | Fail the build at this severity or higher |
+| `files` | string | `**/*.py` | Space-separated file globs. Skips `.venv`, `venv`, `node_modules`. |
+| `format` | string | `json` | `json`, `sarif`, `toon`, `text` |
+| `memory-dir` | string | `.rec-praxis-rlm` | Directory for procedural memory storage |
+| `incremental` | bool | `false` | Only scan files changed in PR/commit |
+| `base-ref` | string | `origin/main` | Base ref for incremental diff |
+
+## Outputs
+
+| Output | Description |
+|---|---|
+| `total-findings` | Number of issues found across all scans |
+| `blocking-findings` | Number of issues at `fail-on` severity or higher |
+| `results-file` | Path to results file (index JSON for `all` scans) |
+
+## Basic usage
 
 ```yaml
 name: Security Scan
-
 on: [push, pull_request]
 
 jobs:
@@ -26,92 +56,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run rec-praxis-rlm Security Scanner
-        uses: jmanhype/rec-praxis-action@v1
+      - uses: jmanhype/rec-praxis-action@v1
         with:
           scan-type: 'all'
           severity: 'HIGH'
           fail-on: 'CRITICAL'
 ```
 
-## Inputs
+## Incremental scanning
 
-| Input | Description | Default |
-|-------|-------------|---------|
-| `scan-type` | Type of scan: `review`, `audit`, `deps`, `all`, `review-js`, `audit-js`, `deps-js`, `all-js` | `all` |
-| `language` | Primary language: `python`, `javascript`, `typescript`, or `auto-detect` | `python` |
-| `severity` | Minimum severity to report (LOW, MEDIUM, HIGH, CRITICAL). **Note:** Only applies to `review` scans; `audit` and `deps` return all findings. | `HIGH` |
-| `fail-on` | Fail build at this severity or higher. Applied to all scan types via CLI (`audit`/`deps`) or post-processing (`review`). | `CRITICAL` |
-| `files` | Files or glob patterns to scan (space-separated; skips `.venv`, `venv`, `node_modules`) | `**/*.py` |
-| `format` | Output format: `json`, `toon`, `sarif`, or `text` | `json` |
-| `memory-dir` | Directory for procedural memory storage | `.rec-praxis-rlm` |
-| `incremental` | Only scan files changed in PR/commit (true/false) | `false` |
-| `base-ref` | Base git ref for incremental scan | `origin/main` |
+Scan only files changed in the PR. Requires `fetch-depth: 0` for git history.
 
-**Notes:**
-- **CLI Parameter Support (rec-praxis-rlm v0.9.2):**
-  - `rec-praxis-review`: Supports `--severity` (filters findings)
-  - `rec-praxis-audit`: Supports `--fail-on` (filters by threshold)
-  - `rec-praxis-deps`: Supports `--fail-on` and `--files` (scoped scanning)
-- For `format: json` or `sarif`, findings are parsed and surfaced via outputs; for `format: text` or `toon`, the CLI's exit code controls failure and counts are not parsed.
-
-## Outputs
-
-| Output | Description |
-|--------|-------------|
-| `total-findings` | Total number of issues found across all scans |
-| `blocking-findings` | Number of issues at fail-on severity or higher |
-| `results-file` | Path to the results file (for artifact upload; for `scan-type: all` this points to an index JSON of all outputs) |
-
-## Usage Examples
-
-### Code Review Only
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'review'
-    severity: 'MEDIUM'
-```
-
-### Security Audit with Strict Failure
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'audit'
-    fail-on: 'HIGH'
-```
-
-### Dependency Scanning with Custom Files
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'deps'
-    files: 'src/**/*.py tests/**/*.py'
-```
-Glob patterns are expanded and passed directly to the CLI so you can scope dependency scans to specific paths.
-
-### Incremental Scanning (Changed Files Only)
-
-Scan only files modified in the PR - significantly faster for large codebases:
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    incremental: 'true'
-    base-ref: 'origin/main'  # Compare against main branch
-```
-
-**Benefits**:
-- 10-100x faster for large repositories
-- Only scans files actually changed in the PR
-- Perfect for pull request workflows
-- Uses git diff to detect changes
-
-**Example for PR workflow**:
 ```yaml
 on:
   pull_request:
@@ -123,546 +78,72 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for git diff
-
+          fetch-depth: 0
       - uses: jmanhype/rec-praxis-action@v1
         with:
           incremental: 'true'
           base-ref: 'origin/${{ github.base_ref }}'
 ```
 
-### TOON Format (Token-Efficient)
+## SARIF output
 
-Save LLM tokens when processing results with AI:
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    format: 'toon'
-
-- name: Upload results
-  uses: actions/upload-artifact@v4
-  with:
-    name: security-scan-results
-    path: '*.toon'
-```
-
-### SARIF Output for GitHub Security Tab
-
-Integrate findings directly into GitHub Security tab (Code Scanning):
+Push findings to the GitHub Security tab:
 
 ```yaml
 - uses: jmanhype/rec-praxis-action@v1
   with:
     format: 'sarif'
 
-- name: Upload SARIF to GitHub Security
+- uses: github/codeql-action/upload-sarif@v2
   if: always()
-  uses: github/codeql-action/upload-sarif@v2
   with:
     sarif_file: code-review-results.sarif
     category: rec-praxis-code-review
-
-- name: Upload Security Audit SARIF
-  if: always()
-  uses: github/codeql-action/upload-sarif@v2
-  with:
-    sarif_file: security-audit-results.sarif
-    category: rec-praxis-security-audit
 ```
 
-**Benefits**:
-- Findings appear in GitHub Security tab alongside CodeQL and Dependabot
-- Automatic OWASP/CWE categorization
-- Filterable by severity (error = CRITICAL/HIGH, warning = MEDIUM/LOW)
-- Trackable across commits
+Requires `security-events: write` permission on the job.
 
-### Full Workflow with Artifacts
+## Docker image
 
-```yaml
-name: Comprehensive Security Scan
+Two-stage build:
 
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+1. **Builder** -- installs gcc/g++, builds `rec-praxis-rlm[all]==0.9.2` into a venv.
+2. **Runtime** -- copies venv, adds git + Node.js 20 + eslint/typescript.
 
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
+| Metric | Value |
+|---|---|
+| First build | ~60s |
+| Cached rebuild | ~10-15s |
+| Entrypoint-only change | ~2s |
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+Local testing:
 
-      - name: Run rec-praxis-rlm Scanner
-        id: scan
-        uses: jmanhype/rec-praxis-action@v1
-        with:
-          scan-type: 'all'
-          severity: 'MEDIUM'
-          fail-on: 'HIGH'
-          format: 'json'
-
-      - name: Upload scan results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rec-praxis-scan-results
-          path: |
-            code-review-results.json
-            security-audit-results.json
-            dependency-scan-results.json
-          retention-days: 90  # Keep artifacts for 90 days
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "### Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "- Total findings: ${{ steps.scan.outputs.total-findings }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Blocking findings: ${{ steps.scan.outputs.blocking-findings }}" >> $GITHUB_STEP_SUMMARY
-```
-
-### Compressed SARIF Artifacts (Recommended)
-
-SARIF files are automatically compressed with gzip (~70% size reduction) for efficient storage:
-
-```yaml
-- name: Run Security Scan (SARIF)
-  uses: jmanhype/rec-praxis-action@v1
-  with:
-    format: 'sarif'
-
-- name: Upload Compressed SARIF
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: security-sarif-reports
-    path: '*.sarif.gz'  # Upload compressed files
-    retention-days: 30
-    compression-level: 0  # Already compressed, skip re-compression
-
-- name: Upload Original SARIF (for GitHub Security Tab)
-  if: always()
-  uses: github/codeql-action/upload-sarif@v2
-  with:
-    sarif_file: code-review-results.sarif  # Use uncompressed for upload
-```
-
-**Benefits**:
-- 70% reduction in artifact storage costs
-- Faster artifact uploads/downloads
-- Both compressed (.gz) and original files available
-- GitHub Security Tab still receives uncompressed SARIF
-
-### Multi-Repository Scanning
-
-Scan multiple repositories in a single workflow using matrix strategy:
-
-```yaml
-name: Multi-Repo Security Scan
-
-on:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly scan
-  workflow_dispatch:
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        repo:
-          - name: frontend
-            url: https://github.com/org/frontend
-            path: frontend
-          - name: backend
-            url: https://github.com/org/backend
-            path: backend
-          - name: mobile-app
-            url: https://github.com/org/mobile-app
-            path: mobile-app
-      fail-fast: false
-
-    steps:
-      - name: Checkout ${{ matrix.repo.name }}
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ matrix.repo.url }}
-          path: ${{ matrix.repo.path }}
-
-      - name: Scan ${{ matrix.repo.name }}
-        uses: jmanhype/rec-praxis-action@v1
-        with:
-          scan-type: 'all'
-          files: '${{ matrix.repo.path }}/**/*.py'
-          format: 'sarif'
-        continue-on-error: true
-
-      - name: Upload ${{ matrix.repo.name }} SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: code-review-results.sarif
-          category: rec-praxis-${{ matrix.repo.name }}
-
-      - name: Upload ${{ matrix.repo.name }} Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.repo.name }}-security-results
-          path: '*.sarif.gz'
-          retention-days: 30
-```
-
-**Benefits**:
-- Single workflow scans multiple repos
-- Parallel execution (faster than sequential)
-- Separate SARIF categories in GitHub Security tab
-- Centralized security monitoring
-- Matrix strategy handles failures gracefully
-
-**Monorepo Scanning**:
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    files: 'services/api/**/*.py services/worker/**/*.py'
-    incremental: 'true'  # Only scan changed services
-```
-
-### PR Comment with Findings
-
-Combine with GitHub Script to post results as PR comments:
-
-```yaml
-- name: Run Security Scan
-  id: scan
-  uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'all'
-    format: 'json'
-  continue-on-error: true
-
-- name: Comment PR
-  if: github.event_name == 'pull_request'
-  uses: actions/github-script@v7
-  with:
-    script: |
-      const fs = require('fs');
-      const results = JSON.parse(fs.readFileSync('code-review-results.json', 'utf8'));
-
-      let comment = `## 🔍 Security Scan Results\n\n`;
-      comment += `**Found ${results.total_findings} issue(s)**\n\n`;
-
-      if (results.findings.length > 0) {
-        comment += `| File | Line | Severity | Issue |\n`;
-        comment += `|------|------|----------|-------|\n`;
-        for (const finding of results.findings.slice(0, 10)) {
-          comment += `| ${finding.file} | ${finding.line || 'N/A'} | ${finding.severity} | ${finding.title} |\n`;
-        }
-      }
-
-      github.rest.issues.createComment({
-        issue_number: context.issue.number,
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        body: comment
-      });
-```
-
-### JavaScript/TypeScript Scanning
-
-Comprehensive security scanning for JavaScript and TypeScript projects:
-
-```yaml
-- name: Run JavaScript Security Scan
-  uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'all-js'
-    language: 'javascript'
-    severity: 'HIGH'
-    fail-on: 'CRITICAL'
-```
-
-**Available JavaScript/TypeScript Scan Types**:
-
-| Scan Type | Description | Tools Used |
-|-----------|-------------|------------|
-| `review-js` | Code review + type checking | ESLint (security plugin) + TypeScript compiler |
-| `audit-js` | Security audit only | ESLint with security rules |
-| `deps-js` | Dependency vulnerabilities | npm audit |
-| `all-js` | Comprehensive JS/TS scan | All of the above |
-
-**What It Detects**:
-
-**ESLint Security Scanning**:
-- Object injection vulnerabilities
-- Non-literal RegExp patterns (ReDoS risks)
-- Unsafe regex patterns
-- Buffer API misuse
-- Child process execution
-- Mustache escape bypasses
-- eval() with expressions
-- CSRF vulnerabilities
-- Timing attack vulnerabilities
-
-**npm audit**:
-- CVE vulnerabilities in npm packages
-- Critical and high-severity issues
-- Outdated dependencies with known exploits
-
-**TypeScript Compiler**:
-- Type errors that could lead to runtime bugs
-- Strict null checks
-- Type safety violations
-
-**Example Workflow for Node.js Project**:
-
-```yaml
-name: JavaScript Security Scan
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run Comprehensive JS Security Scan
-        uses: jmanhype/rec-praxis-action@v1
-        with:
-          scan-type: 'all-js'
-          language: 'javascript'
-          format: 'sarif'
-
-      - name: Upload ESLint SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: eslint-results.json
-          category: rec-praxis-eslint
-
-      - name: Upload npm audit results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-audit-results
-          path: npm-audit-results.json
-```
-
-**React/TypeScript Project**:
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'review-js'  # ESLint + TypeScript compiler
-    language: 'typescript'
-    severity: 'MEDIUM'
-```
-
-**Monorepo with Mixed Languages**:
-
-```yaml
-jobs:
-  scan-python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jmanhype/rec-praxis-action@v1
-        with:
-          scan-type: 'all'
-          files: 'backend/**/*.py'
-
-  scan-javascript:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jmanhype/rec-praxis-action@v1
-        with:
-          scan-type: 'all-js'
-          language: 'javascript'
-```
-
-## What It Detects
-
-### Code Review
-- SQL injection patterns
-- Hardcoded credentials (API keys, passwords, tokens)
-- Weak cryptography (MD5, SHA1)
-- Bare except blocks
-- Shell injection via subprocess
-- Dangerous code execution (eval/exec)
-
-### Security Audit
-- OWASP Top 10 vulnerabilities
-- CWE-mapped security issues
-- Authentication and authorization flaws
-- Data exposure risks
-
-### Dependency Scanning
-- CVE vulnerabilities in Python packages
-- Exposed secrets and API keys
-- High-entropy strings (potential credentials)
-- Outdated dependencies
-
-## Procedural Memory
-
-rec-praxis-rlm **learns from your fixes**:
-
-1. **First scan**: Detects SQL injection
-2. **You fix it**: Apply parameterized queries
-3. **Agent stores experience**: "SQL injection → params = success"
-4. **Next scan**: Agent recalls this pattern and provides better suggestions
-
-Memory is stored in `.rec-praxis-rlm/` directory (can be customized via `memory-dir` input).
-
-## Artifact Storage Optimization
-
-### Automatic SARIF Compression
-
-When using `format: 'sarif'`, the action automatically compresses SARIF files with gzip:
-
-- **Storage Reduction**: ~70% smaller artifacts
-- **Cost Savings**: Reduced GitHub Actions storage costs
-- **Dual Output**: Both `.sarif` (for GitHub Security) and `.sarif.gz` (for archival)
-- **Transparent**: No changes needed in your workflow
-
-### Recommended Retention Policies
-
-Balance security audit history with storage costs:
-
-| Artifact Type | Retention | Use Case |
-|---------------|-----------|----------|
-| JSON results | 90 days | Long-term trend analysis |
-| SARIF (compressed) | 30 days | Security tab integration |
-| TOON format | 7 days | Short-term LLM processing |
-
-**Example with retention**:
-```yaml
-- uses: actions/upload-artifact@v4
-  with:
-    name: security-results
-    path: '*.sarif.gz'
-    retention-days: 30
-```
-
-## Performance
-
-- **Fast**: Scans 1000 lines of Python in ~2-5 seconds
-- **Quick Startup**: Multi-stage Docker build with layer caching (~10-15s vs 60s)
-- **Token-efficient**: TOON format reduces token usage by 40-50%
-- **Lightweight**: Docker image ~350MB (multi-stage build optimization)
-- **Storage-optimized**: SARIF compression reduces artifact size by 70%
-
-### Docker Build Optimization
-
-The action uses multi-stage Docker builds for fast startup:
-
-1. **Builder Stage**: Compiles dependencies with build tools (gcc, g++)
-2. **Runtime Stage**: Minimal image with only runtime requirements
-3. **Layer Caching**: Dependencies cached unless version changes
-4. **Security**: Runs as non-root user (uid 1000)
-
-**Cache Benefits**:
-- First run: ~60s (download + build)
-- Subsequent runs: ~10-15s (cached layers)
-- entrypoint.sh changes: ~2s rebuild (single layer)
-
-**Local Testing**:
 ```bash
-# Build with caching
 docker build -t rec-praxis-action .
-
-# Run locally
 docker run -v $(pwd):/github/workspace rec-praxis-action all HIGH CRITICAL "*.py" json
 ```
 
-## Requirements
+## Limitations
 
-- GitHub Actions runner (ubuntu-latest, windows-latest, macos-latest)
-- Python or JavaScript/TypeScript files in repository
-- No additional setup required (Python, Node.js, and all dependencies included in Docker image)
+- Pattern-based detection only. No semantic/LLM analysis yet.
+- The `severity` filter only applies to `review` scans; `audit` and `deps` return all findings regardless.
+- `toon` and `text` formats do not parse finding counts; exit code controls pass/fail.
+- LLM-powered analysis inputs (`use-llm`, `lm-model`) are present but non-functional. Requires upstream changes to `rec-praxis-rlm` v0.10.0 that have not shipped.
+- Procedural memory accumulates across runs only if you persist the `memory-dir` between workflow runs (not done by default).
 
 ## Versioning
 
-Use specific versions for stability:
-
 ```yaml
-uses: jmanhype/rec-praxis-action@v1.0.0  # Specific version
-uses: jmanhype/rec-praxis-action@v1      # Latest v1.x
-uses: jmanhype/rec-praxis-action@main    # Latest (unstable)
+uses: jmanhype/rec-praxis-action@v1.0.0  # pinned
+uses: jmanhype/rec-praxis-action@v1      # latest v1.x
+uses: jmanhype/rec-praxis-action@main    # latest (unstable)
 ```
 
-## LLM-Powered Analysis (Roadmap)
+## Related
 
-### Status: Pending Upstream Implementation
-
-The Action includes inputs for LLM-powered deep analysis, but this feature requires changes to the upstream `rec-praxis-rlm` package first.
-
-### What's Coming in v0.10.0
-
-**Deep Semantic Analysis** using DSPy with:
-- Business logic vulnerability detection
-- Context-aware SQL injection analysis
-- Authentication/authorization flaw detection
-- Data flow and taint analysis
-- Race condition detection
-- API misuse identification
-
-### Supported LLM Providers
-
-- **Groq** (`groq/llama-3.3-70b-versatile`) - Fast & cheap (~$0.01-0.03 per 1000 lines)
-- **OpenAI** (`openai/gpt-4o-mini`, `openai/gpt-4o`) - Most accurate (~$0.05-0.10 per 1000 lines)
-- **LiteLLM** - 100+ providers via unified API
-- **OpenRouter** - Access to multiple models with fallback routing
-
-### Future Usage (Once Implemented)
-
-```yaml
-- uses: jmanhype/rec-praxis-action@v1
-  with:
-    scan-type: 'all'
-    use-llm: 'true'  # Enable LLM analysis
-    lm-model: 'groq/llama-3.3-70b-versatile'
-  env:
-    GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-```
-
-### Implementation Plan
-
-To add LLM support to rec-praxis-rlm:
-
-1. Add `--use-llm` and `--lm-model` flags to `rec-praxis-review` and `rec-praxis-audit` CLIs
-2. Create `CodeReviewAgentLLM` and `SecurityAuditAgentLLM` classes
-3. Integrate DSPy `PraxisRLMPlanner` for semantic analysis
-4. Combine pattern-based + LLM findings with deduplication
-5. Add integration tests with Groq/OpenAI
-
-**Estimated effort**: ~330 lines of code across 5 files
-
-See implementation plan above for details.
-
-## Related Projects
-
-- [rec-praxis-rlm](https://github.com/jmanhype/rec-praxis-rlm) - Python package
-- [rec-praxis-rlm PyPI](https://pypi.org/project/rec-praxis-rlm/) - Install locally
-- [VS Code Extension](https://github.com/jmanhype/rec-praxis-rlm/tree/main/vscode-extension) - IDE integration
+- [rec-praxis-rlm](https://github.com/jmanhype/rec-praxis-rlm) -- underlying Python package
+- [PyPI](https://pypi.org/project/rec-praxis-rlm/)
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file
-
-## Support
-
-- [Report Issues](https://github.com/jmanhype/rec-praxis-action/issues)
-- [Documentation](https://github.com/jmanhype/rec-praxis-rlm#readme)
-- [PyPI Package](https://pypi.org/project/rec-praxis-rlm/)
+MIT
